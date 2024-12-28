@@ -26,3 +26,5 @@
 */
 #error "Incorrect use of JUCE cpp file"
 #endif
+
+#include "cello_utils/flags/cello_utils_flags.cpp"

@@ -34,3 +34,5 @@ BEGIN_JUCE_MODULE_DECLARATION
  dependencies:     juce_core, juce_data_structures, cello
 END_JUCE_MODULE_DECLARATION
 */
+
+#include "cello_utils/flags/cello_utils_flags.h"

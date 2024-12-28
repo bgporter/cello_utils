@@ -18,3 +18,23 @@
 */
 
 #pragma once
+
+#include "cello_object.h"
+namespace cello::utils
+{
+
+class Context : public cello::Object
+{
+  public:
+};
+
+class Rules : public cello::Object
+{
+  public:
+};
+
+class Flags : public cello::Object
+{
+  public:
+};
+} // namespace cello::utils
