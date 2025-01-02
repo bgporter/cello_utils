@@ -25,7 +25,7 @@ BEGIN_JUCE_MODULE_DECLARATION
  ID:               cello_utils
  vendor:           Brett g Porter
  version:          0.0.1
- name:             Cello Utils
+ name:             Cello Utilities
  description:      Ancillary/utility classes for @bgporter's cello library
  website:          https://github.com/bgporter/cello_utils
  license:          MIT
