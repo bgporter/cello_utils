@@ -27,7 +27,6 @@ namespace cello::utils
  *
  * You'll want to derive a class from this that adds a cello::Value
  * for each of the things you need to set at runtime.
- *
  */
 class Flags : public cello::Object
 {
@@ -37,11 +36,11 @@ public:
     {
     }
 };
+
 /**
  * @brief Context class that contains user and platform information
  * that will be used to convert the flag rules into a set of flags
  * for the current execution of the application.
- *
  */
 class Context : public cello::Object
 {
@@ -123,9 +122,9 @@ private:
      */
     juce::var result () const { return data.getProperty ("result", true); }
 
-    bool testMin (const juce::var& test, const juce::var& actual) const;
-    bool testMax (const juce::var& test, const juce::var& actual) const;
-    bool testAllowed (const juce::var& test, const juce::var& actual) const;
+    bool isAboveMin (const juce::var& test, const juce::var& actual) const;
+    bool isBelowMax (const juce::var& test, const juce::var& actual) const;
+    bool isAllowed (const juce::var& test, const juce::var& actual) const;
 };
 
 } // namespace cello::utils

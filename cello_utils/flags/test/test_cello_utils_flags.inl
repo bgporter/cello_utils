@@ -1,6 +1,30 @@
-
-
 #include <juce_core/juce_core.h>
+
+namespace
+{
+bool cmpStr (const juce::String& a, const juce::String& b)
+{
+    return a.compare (b) == 0;
+}
+} // namespace
+
+/**
+ * @brief A set of flags with defaults to use for testing.
+ *
+ */
+class UnitTestFlags : public cello::utils::Flags
+{
+public:
+    UnitTestFlags (cello::Object* root)
+    : cello::utils::Flags (root)
+    {
+    }
+
+    MAKE_VALUE_MEMBER (bool, test1, false);
+    MAKE_VALUE_MEMBER (bool, test2, false);
+    MAKE_VALUE_MEMBER (bool, test3, false);
+    MAKE_VALUE_MEMBER (juce::String, test4, "test4");
+};
 
 class Test_Flags : public TestSuite
 {
@@ -14,7 +38,7 @@ public:
     {
         beginTest ("Feature flag tests");
 
-        test ("minimum",
+        test ("condition: minimum",
               [this] ()
               {
                   // clang-format off
@@ -33,7 +57,7 @@ public:
                   expect (!condition.evaluate (context).isVoid ());
               });
 
-        test ("maximum",
+        test ("condition: maximum",
               [this] ()
               {
                   // clang-format off
@@ -52,7 +76,7 @@ public:
                   expect (!static_cast<bool> (condition.evaluate (context)));
               });
 
-        test ("min/max range",
+        test ("condition: min/max range",
               [this] ()
               {
                   // clang-format off
@@ -73,7 +97,7 @@ public:
                   expect (!static_cast<bool> (condition.evaluate (context)));
               });
 
-        test ("allowed",
+        test ("condition: allowed",
               [this] ()
               {
                   // clang-format off
@@ -93,7 +117,7 @@ public:
                   expect (!static_cast<bool> (condition.evaluate (context)));
               });
 
-        test ("disallowed",
+        test ("condition: disallowed",
               [this] ()
               {
                   // clang-format off
@@ -114,7 +138,7 @@ public:
                   expect (!static_cast<bool> (condition.evaluate (context)));
               });
 
-        test ("exact value",
+        test ("condition: exact value",
               [this] ()
               {
                   // clang-format off
@@ -130,7 +154,7 @@ public:
                   expect (!condition.evaluate (context).isVoid ());
               });
 
-        test ("multiple tests per condition",
+        test ("condition: multiple tests per condition",
               [this] ()
               {
                   // clang-format off
@@ -156,7 +180,7 @@ public:
                   expect (!static_cast<bool> (condition.evaluate (context)));
               });
 
-        test ("custom result returns",
+        test ("condition: custom result returns",
               [this] ()
               {
                   // clang-format off
@@ -172,10 +196,135 @@ public:
                   context.setattr ("type", juce::String { "alpha" });
                   expect (condition.evaluate (context).isVoid ());
               });
+
+        setup (
+            [this] ()
+            {
+                flags   = std::make_unique<UnitTestFlags> (nullptr);
+                context = std::make_unique<cello::utils::Context> ();
+                context->setattr ("cohort", 2);
+                context->setattr ("type", juce::String { "alpha" });
+            });
+
+        tearDown (
+            [this] ()
+            {
+                flags   = nullptr;
+                context = nullptr;
+            });
+
+        test ("flags: test simple flags",
+              [this] ()
+              {
+                  expect (!flags->test1);
+                  expect (!flags->test2);
+                  expect (!flags->test3);
+                  expect (cmpStr (flags->test4, "test4"));
+
+                  // define the list of rules:
+                  // clang-format off
+                  juce::ValueTree rules { "rules", {},
+                    {
+                        { "test1", {}, 
+                            { { "condition", {}, 
+                                { { "cohort", { { "min", 3}, { "max", 5 } } }, } } 
+                            }
+                        },
+
+                        { "test2", {}, 
+                            { { "condition", {}, 
+                                { { "cohort", { { "min", 1}, { "max", 3 } } }, } } 
+                            }
+                        }
+                    }
+                  };
+                  // clang-format on
+
+                  cello::utils::Rules ruleSet { rules };
+                  ruleSet.evaluate (*context, *flags);
+                  expect (!flags->test1);
+                  expect (flags->test2);
+                  expect (!flags->test3);
+                  expect (cmpStr (flags->test4, "test4"));
+
+                  context->setattr ("cohort", 4);
+                  // reset this one...
+                  flags->test2 = false;
+                  ruleSet.evaluate (*context, *flags);
+                  expect (flags->test1);
+                  expect (!flags->test2);
+                  expect (!flags->test3);
+                  expect (cmpStr (flags->test4, "test4"));
+              });
+
+        test ("flags: test complex flags",
+              [this] ()
+              {
+                  // clang-format off
+                  juce::ValueTree rules { "rules", {},
+                    {
+                        { "test1", {}, {
+                            { "condition", {}, {
+                                { "cohort", { { "min", 3}, { "max", 5 } } },
+                                { "type", { { "allowed", "dev,int" } } }
+                            }},
+                            { "condition", {}, {
+                                { "type", { { "allowed", "beta" } } },
+                                { "cohort", { { "min", 1}, { "max", 2 } } }
+                            }}
+                        }},
+                        { "test2", { { "released", true } }, {} },
+                        { "test4", {}, {
+                            { "condition", { { "result", "customValue" } }, {
+                                { "type", { { "disallowed", "alpha,prod" } } }
+                            }}
+                        }}
+                    }
+                  };
+                  // clang-format on
+
+                  cello::utils::Rules ruleSet { rules };
+
+                  // Test first condition path (dev/int user, cohort 3-5)
+                  context->setattr ("type", juce::String ("dev"));
+                  context->setattr ("cohort", 4);
+                  ruleSet.evaluate (*context, *flags);
+                  expect (flags->test1);
+                  expect (flags->test2);
+                  expect (cmpStr (flags->test4, "customValue"));
+                  // Test second condition path (beta user, cohort 1-2)
+                  flags = std::make_unique<UnitTestFlags> (nullptr);
+                  context->setattr ("type", juce::String ("beta"));
+                  context->setattr ("cohort", 1);
+                  flags->test1 = false;
+                  ruleSet.evaluate (*context, *flags);
+                  expect (flags->test1);
+                  expect (flags->test2);
+                  expect (flags->test4 == juce::String ("customValue"));
+
+                  // Test failing both conditions
+                  flags = std::make_unique<UnitTestFlags> (nullptr);
+                  context->setattr ("type", juce::String ("beta"));
+                  context->setattr ("cohort", 4);
+                  flags->test1 = false;
+                  ruleSet.evaluate (*context, *flags);
+                  expect (!flags->test1);
+                  expect (flags->test2);
+                  expect (flags->test4 == juce::String ("customValue"));
+
+                  // Test disallowed types
+                  flags = std::make_unique<UnitTestFlags> (nullptr);
+                  context->setattr<juce::String> ("type", "prod");
+                  ruleSet.evaluate (*context, *flags);
+                  expect (!flags->test1);
+                  expect (flags->test2);
+                  expect (flags->test4 != juce::String ("customValue"));
+              });
     }
 
 private:
-    // !!! test class member vars here...
+    std::unique_ptr<UnitTestFlags> flags;
+    std::unique_ptr<cello::utils::Context> context;
 };
 
 static Test_Flags testFlags;

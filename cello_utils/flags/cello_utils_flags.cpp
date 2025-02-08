@@ -24,6 +24,7 @@
 namespace
 {
 const juce::Identifier allowedID { "allowed" };
+const juce::Identifier conditionID { "condition" };
 const juce::Identifier disallowedID { "disallowed" };
 const juce::Identifier maxID { "max" };
 const juce::Identifier minID { "min" };
@@ -35,8 +36,6 @@ const juce::Identifier valueID { "value" };
 
 namespace cello::utils
 {
-// !!! Implement the Context class here...
-// !!! Implement the Rules class here...
 
 void Rules::evaluate (const Context& context, Flags& flags) const
 {
@@ -44,8 +43,15 @@ void Rules::evaluate (const Context& context, Flags& flags) const
     // 1 or more conditions.
     for (const auto& flagRule : data)
     {
+        // NOTE that the type of the `flagRule` tree may be any valid
+        // juce::Identifier; it joins this set of conditions to the corresponding
+        // flag in the `flags` object.
+
         // if this flag has been released, we don't need to evaluate it.
-        if (const auto released = flagRule.getProperty (releasedID, false))
+        // Note that we don't just check for the presence of the property,
+        // but also that it is set to true -- if the XML is "released='0'",
+        // we should treat that the same as if the property were not present.
+        if (const auto released = flagRule.getProperty (releasedID, false); released)
         {
             // set the flag to true (default) or a custom result value if
             // one is provided.
@@ -58,6 +64,12 @@ void Rules::evaluate (const Context& context, Flags& flags) const
         // pass, the flag will be left in its current/default state.
         for (const auto& conditionTree : flagRule)
         {
+            if (conditionTree.getType () != conditionID)
+            {
+                // we shouldn't have any children that aren't conditions.
+                jassertfalse;
+                continue;
+            }
             Condition condition { conditionTree };
             if (const auto result { condition.evaluate (context) }; !result.isVoid ())
             {
@@ -68,7 +80,6 @@ void Rules::evaluate (const Context& context, Flags& flags) const
     }
 }
 
-// !!! Implement the Condition class here...
 juce::var Condition::evaluate (const Context& context) const
 {
     juce::ValueTree contextTree { context };
@@ -82,13 +93,13 @@ juce::var Condition::evaluate (const Context& context) const
             const auto contextValue { contextTree.getProperty (child.getType ()) };
             bool testResult { false };
             if (propertyName == minID)
-                testResult = testMin (propertyValue, contextValue);
+                testResult = isAboveMin (propertyValue, contextValue);
             else if (propertyName == maxID)
-                testResult = testMax (propertyValue, contextValue);
+                testResult = isBelowMax (propertyValue, contextValue);
             else if (propertyName == allowedID)
-                testResult = testAllowed (propertyValue, contextValue);
+                testResult = isAllowed (propertyValue, contextValue);
             else if (propertyName == disallowedID)
-                testResult = !testAllowed (propertyValue, contextValue);
+                testResult = !isAllowed (propertyValue, contextValue);
             else if (propertyName == valueID)
                 testResult = (propertyValue == contextValue);
             else
@@ -106,23 +117,23 @@ juce::var Condition::evaluate (const Context& context) const
     return result ();
 }
 
-bool Condition::testMin (const juce::var& test, const juce::var& actual) const
+bool Condition::isAboveMin (const juce::var& test, const juce::var& actual) const
 {
     if (test.isInt () && actual.isInt ())
         return static_cast<int> (actual) >= static_cast<int> (test);
     return actual.toString ().compareIgnoreCase (test.toString ()) >= 0;
 }
 
-bool Condition::testMax (const juce::var& test, const juce::var& actual) const
+bool Condition::isBelowMax (const juce::var& test, const juce::var& actual) const
 {
     if (test.isInt () && actual.isInt ())
         return static_cast<int> (actual) < static_cast<int> (test);
     return actual.toString ().compareIgnoreCase (test.toString ()) < 0;
 }
 
-bool Condition::testAllowed (const juce::var& test, const juce::var& actual) const
+bool Condition::isAllowed (const juce::var& test, const juce::var& actual) const
 {
-    // both test values will be comma-separated lists of strings.
+    // the test value will be a comma-separated lists of strings; actual is a single string.
     const auto testValues { juce::StringArray::fromTokens (test.toString (), ",", "") };
     return testValues.contains (actual.toString ());
 }
